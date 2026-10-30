@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital AI | Patient Intake</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f6fb;
+            color: #182238;
+        }
+
+        header {
+            background: #123b68;
+            color: white;
+            padding: 20px 7%;
+        }
+
+        header h1 { margin: 0 0 6px; font-size: 24px; }
+        header p { margin: 0; color: #d7e7fa; }
+
+        main {
+            max-width: 760px;
+            margin: 32px auto;
+            padding: 0 18px;
+        }
+
+        .card {
+            background: white;
+            padding: 28px;
+            border-radius: 16px;
+            box-shadow: 0 5px 24px #1c355510;
+        }
+
+        h2 { margin-top: 0; }
+        .note { color: #59677d; line-height: 1.5; }
+
+        label {
+            display: block;
+            margin: 18px 0 7px;
+            font-weight: 600;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font: inherit;
+        }
+
+        textarea { min-height: 110px; resize: vertical; }
+
+        button {
+            margin-top: 22px;
+            padding: 13px 18px;
+            border: 0;
+            border-radius: 8px;
+            background: #1769aa;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:disabled { opacity: 0.6; cursor: wait; }
+
+        .upload-box, .voice-box {
+            margin-top: 26px;
+            padding: 18px;
+            border: 1px dashed #9db2cc;
+            border-radius: 12px;
+            background: #f8fafd;
+        }
+
+        .upload-box h3, .voice-box h3 {
+            margin: 0 0 6px;
+            font-size: 18px;
+        }
+
+        .upload-box label, .voice-box label { margin-top: 14px; }
+
+        .secondary-button {
+            margin-top: 14px;
+            background: #3d5a80;
+        }
+
+        .stop-button { background: #a83232; }
+        .button-row { display: flex; flex-wrap: wrap; gap: 10px; }
+        .button-row button { margin-top: 14px; }
+
+        .status {
+            margin-top: 12px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .status.error { color: #b42318; }
+        .status.ok { color: #1a6b3c; }
+
+        .warning {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #fff6e0;
+            color: #6b4a00;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        #ocrSection, #transcriptSection { display: none; }
+        #ocrText { min-height: 180px; }
+        #originalTranscript { min-height: 120px; }
+
+        .confirm-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 14px;
+            font-weight: 600;
+        }
+
+        .confirm-row input {
+            width: auto;
+            margin-top: 3px;
+        }
+
+        .confirm-row label {
+            margin: 0;
+            font-weight: 600;
+        }
+
+        #result {
+            margin-top: 18px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        footer {
+            text-align: center;
+            padding: 22px;
+            color: #59677d;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Hospital AI</h1>
+        <p>Patient Intake & History Assistant</p>
+    </header>
+
+    <main>
+        <section class="card">
+            <h2>Patient Registration</h2>
+            <p class="note">
+                Enter your details and describe what brought you to the hospital.
+                Please do not enter real patient information during development.
+            </p>
+
+            <form id="intakeForm">
+                <label for="language">Preferred language</label>
+                <select id="language" name="language">
+                    <option value="en">English</option>
+                    <option value="hi">हिन्दी</option>
+                </select>
+
+                <label for="name">Patient name</label>
+                <input id="name" name="name" required maxlength="100"
+                       placeholder="Enter a test name">
+
+                <label for="age">Age</label>
+                <input id="age" name="age" type="number"
+                       min="0" max="120" required>
+
+                <div class="voice-box">
+                    <h3>Speak about your problem</h3>
+                    <p class="note" style="margin: 0;">
+                        Speak naturally in Hindi, English or Hinglish. The AI
+                        will create an English version while keeping the
+                        original transcript for checking.
+                    </p>
+
+                    <label for="voiceLanguage">Speech language</label>
+                    <select id="voiceLanguage">
+                        <option value="auto">Auto-detect (Hindi / English)</option>
+                        <option value="mixed">Hinglish (mix Hindi + English)</option>
+                        <option value="hi">Hindi only</option>
+                        <option value="en">English only</option>
+                    </select>
+
+                    <div class="button-row">
+                        <button id="recordButton" type="button">
+                            Start recording
+                        </button>
+                        <button id="stopButton" type="button"
+                                class="stop-button" disabled>
+                            Stop & transcribe
+                        </button>
+                    </div>
+
+                    <div id="voiceStatus" class="status" role="status"
+                         aria-live="polite"></div>
+
+                    <div id="transcriptSection">
+                        <label for="originalTranscript">
+                            Original speech transcript (editable)
+                        </label>
+                        <textarea id="originalTranscript" maxlength="5000"
+                                  placeholder="Your spoken words will appear here"></textarea>
+
+                        <button id="convertButton" type="button"
+                                class="secondary-button">
+                            Convert edited transcript to English
+                        </button>
+
+                        <div class="warning">
+                            Check the original transcript and English version.
+                            Speech recognition and translation can make mistakes,
+                            especially with medical words. The AI must not add
+                            symptoms or details that were not spoken.
+                        </div>
+
+                        <div id="translationNotes" class="status"></div>
+                    </div>
+
+                    <div class="warning">
+                        Demo privacy notice: audio is sent to the configured
+                        Groq service for processing and is not saved by this
+                        application. Use fictional sample information only.
+                    </div>
+                </div>
+
+                <label for="complaints">Current complaints / English version</label>
+                <textarea id="complaints" name="complaints" required
+                          maxlength="3000"
+                          placeholder="Type your complaints here, or use the microphone above"></textarea>
+                <p class="note" style="font-size: 13px; margin-top: 6px;">
+                    You can edit the English text before submitting.
+                </p>
+
+                <div class="upload-box">
+                    <h3>Upload a medical document (optional)</h3>
+                    <p class="note" style="margin: 0;">
+                        PNG, JPG or PDF, up to 5 MB. Use fictional sample
+                        documents only during development.
+                    </p>
+
+                    <label for="documentFile">Choose a file</label>
+                    <input id="documentFile" type="file"
+                           accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf">
+
+                    <button id="ocrButton" type="button"
+                            class="secondary-button">
+                        Read text from document
+                    </button>
+
+                    <div id="ocrStatus" class="status" role="status"
+                         aria-live="polite"></div>
+
+                    <div id="ocrSection">
+                        <label for="ocrText">
+                            Text read from the document (please check and correct)
+                        </label>
+                        <textarea id="ocrText" maxlength="20000"></textarea>
+
+                        <div class="warning">
+                            This text was read automatically and may contain
+                            mistakes. It is not verified medical information.
+                            It will be saved with your intake when you submit,
+                            and the doctor will see it labelled as document text.
+                        </div>
+
+                        <div class="confirm-row">
+                            <input id="ocrConfirm" type="checkbox">
+                            <label for="ocrConfirm">
+                                I have checked this text and corrected any mistakes.
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="submitButton" type="submit">
+                    Submit intake
+                </button>
+            </form>
+
+            <div id="result" role="status" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <footer>
+        Development version · Not for clinical use
+    </footer>
+
+    <script>
+        const form = document.getElementById("intakeForm");
+        const result = document.getElementById("result");
+        const submitButton = document.getElementById("submitButton");
+
+        const documentFile = document.getElementById("documentFile");
+        const ocrButton = document.getElementById("ocrButton");
+        const ocrStatus = document.getElementById("ocrStatus");
+        const ocrSection = document.getElementById("ocrSection");
+        const ocrText = document.getElementById("ocrText");
+        const ocrConfirm = document.getElementById("ocrConfirm");
+        let ocrOriginal = null;
+
+        const recordButton = document.getElementById("recordButton");
+        const stopButton = document.getElementById("stopButton");
+        const voiceLanguage = document.getElementById("voiceLanguage");
+        const voiceStatus = document.getElementById("voiceStatus");
+        const transcriptSection = document.getElementById("transcriptSection");
+        const originalTranscript = document.getElementById("originalTranscript");
+        const convertButton = document.getElementById("convertButton");
+        const translationNotes = document.getElementById("translationNotes");
+
+        const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+        const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".pdf"];
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let audioStream = null;
+        let recordingTimeout = null;
+        let isUploadingAudio = false;
+        let detectedSpeechLanguage = "";
+
+        function setOcrStatus(message, type) {
+            ocrStatus.textContent = message;
+            ocrStatus.className = "status" + (type ? " " + type : "");
+        }
+
+        function setVoiceStatus(message, type) {
+            voiceStatus.textContent = message;
+            voiceStatus.className = "status" + (type ? " " + type : "");
+        }
+
+        function resetUploadArea() {
+            documentFile.value = "";
+            ocrText.value = "";
+            ocrConfirm.checked = false;
+            ocrOriginal = null;
+            ocrSection.style.display = "none";
+            setOcrStatus("", "");
+        }
+
+        function resetVoiceArea() {
+            if (recordingTimeout) {
+                clearTimeout(recordingTimeout);
+                recordingTimeout = null;
+            }
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            mediaRecorder = null;
+            audioChunks = [];
+            originalTranscript.value = "";
+            transcriptSection.style.display = "none";
+            translationNotes.textContent = "";
+            detectedSpeechLanguage = "";
+            recordButton.disabled = false;
+            stopButton.disabled = true;
+            setVoiceStatus("", "");
+        }
+
+        documentFile.addEventListener("change", () => {
+            ocrText.value = "";
+            ocrConfirm.checked = false;
+            ocrOriginal = null;
+            ocrSection.style.display = "none";
+            setOcrStatus("", "");
+        });
+
+        recordButton.addEventListener("click", async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia ||
+                !window.MediaRecorder) {
+                setVoiceStatus(
+                    "Your browser does not support audio recording. Please use a recent version of Chrome or Edge.",
+                    "error"
+                );
+                return;
+            }
+
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+
+                const mimeChoices = [
+                    "audio/webm;codecs=opus",
+                    "audio/webm",
+                    "audio/ogg;codecs=opus",
+                    "audio/mp4"
+                ];
+                let selectedMime = "";
+                for (const mime of mimeChoices) {
+                    if (MediaRecorder.isTypeSupported(mime)) {
+                        selectedMime = mime;
+                        break;
+                    }
+                }
+
+                mediaRecorder = selectedMime
+                    ? new MediaRecorder(audioStream, { mimeType: selectedMime })
+                    : new MediaRecorder(audioStream);
+
+                mediaRecorder.addEventListener("dataavailable", event => {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                });
+
+                mediaRecorder.addEventListener("stop", async () => {
+                    if (recordingTimeout) {
+                        clearTimeout(recordingTimeout);
+                        recordingTimeout = null;
+                    }
+
+                    if (audioStream) {
+                        audioStream.getTracks().forEach(track => track.stop());
+                        audioStream = null;
+                    }
+
+                    const mimeType = mediaRecorder.mimeType || "audio/webm";
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    mediaRecorder = null;
+                    audioChunks = [];
+
+                    if (!audioBlob.size) {
+                        setVoiceStatus("No audio was captured. Please try again.", "error");
+                        recordButton.disabled = false;
+                        stopButton.disabled = true;
+                        return;
+                    }
+
+                    await uploadRecording(audioBlob, mimeType);
+                });
+
+                // Emit small chunks regularly so the browser does not keep
+                // the entire recording as one unflushed in-memory blob.
+                mediaRecorder.start(1000);
+                recordButton.disabled = true;
+                stopButton.disabled = false;
+                setVoiceStatus("Recording... Speak clearly, then select Stop & transcribe.", "ok");
+
+                // Five-minute cap. The server still enforces the 15 MB limit.
+                recordingTimeout = setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state === "recording") {
+                        setVoiceStatus("Five-minute recording limit reached. Processing audio...", "");
+                        mediaRecorder.stop();
+                        stopButton.disabled = true;
+                    }
+                }, 300000);
+
+            } catch (error) {
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+                setVoiceStatus(
+                    "Microphone access failed. Check browser microphone permission and try again.",
+                    "error"
+                );
+            }
+        });
+
+        stopButton.addEventListener("click", () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                stopButton.disabled = true;
+                setVoiceStatus("Recording stopped. Sending audio for transcription...", "");
+                mediaRecorder.stop();
+            }
+        });
+
+        async function uploadRecording(blob, mimeType) {
+            isUploadingAudio = true;
+            recordButton.disabled = true;
+            stopButton.disabled = true;
+            setVoiceStatus(
+                "Transcribing speech and preparing the English version. Please wait...",
+                ""
+            );
+
+            const extension = mimeType.includes("ogg") ? ".ogg" :
+                mimeType.includes("mp4") ? ".mp4" : ".webm";
+
+            if (blob.size > 15 * 1024 * 1024) {
+                setVoiceStatus(
+                    "This recording is larger than 15 MB. Please record a shorter sample.",
+                    "error"
+                );
+                isUploadingAudio = false;
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("audio", blob, "patient-recording" + extension);
+            formData.append("language_hint", voiceLanguage.value);
+
+            try {
+                const response = await fetch("/api/voice-intake", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Voice processing failed.");
+                }
+
+                originalTranscript.value = data.original_transcript || "";
+                document.getElementById("complaints").value = data.english_text || "";
+                detectedSpeechLanguage = data.detected_language || "unknown";
+                transcriptSection.style.display = "block";
+
+                const languageLabel = /^(hi|hindi)$/i.test(detectedSpeechLanguage) ? "Hindi" :
+                    /^(en|english)$/i.test(detectedSpeechLanguage) ? "English" :
+                    detectedSpeechLanguage;
+                let completionMessage =
+                    "Transcription complete. Whisper's detected language: " +
+                    languageLabel + ". Review both versions before submitting.";
+                if (data.transcript_truncated) {
+                    completionMessage += " WARNING: the original transcript exceeded the 5,000-character limit and was shortened.";
+                }
+                if (data.audio_duration_seconds && data.audio_duration_seconds >= 295) {
+                    completionMessage += " The recording was close to the five-minute limit.";
+                }
+                setVoiceStatus(completionMessage, data.transcript_truncated ? "error" : "ok");
+
+                if (Array.isArray(data.translation_notes) && data.translation_notes.length) {
+                    translationNotes.textContent =
+                        "AI notes: " + data.translation_notes.join(" ");
+                    translationNotes.className = "status error";
+                } else {
+                    translationNotes.textContent =
+                        "No specific uncertainty was flagged. Please still check the wording.";
+                    translationNotes.className = "status";
+                }
+            } catch (error) {
+                setVoiceStatus("Could not process recording: " + error.message, "error");
+            } finally {
+                isUploadingAudio = false;
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+            }
+        }
+
+        convertButton.addEventListener("click", async () => {
+            const text = originalTranscript.value.trim();
+            if (!text) {
+                setVoiceStatus("Enter or record a transcript first.", "error");
+                return;
+            }
+
+            convertButton.disabled = true;
+            setVoiceStatus("Converting the edited transcript into English...", "");
+            try {
+                const response = await fetch("/api/translate-text", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not convert transcript.");
+                }
+
+                document.getElementById("complaints").value = data.english_text || "";
+                setVoiceStatus(
+                    "English version updated. Please check it before submitting.",
+                    "ok"
+                );
+            } catch (error) {
+                setVoiceStatus("Could not convert transcript: " + error.message, "error");
+            } finally {
+                convertButton.disabled = false;
+            }
+        });
+
+        ocrButton.addEventListener("click", async () => {
+            const file = documentFile.files[0];
+
+            if (!file) {
+                setOcrStatus("Please choose a file first.", "error");
+                return;
+            }
+
+            const lowerName = file.name.toLowerCase();
+            const hasGoodExtension = ALLOWED_EXTENSIONS.some(
+                (ext) => lowerName.endsWith(ext)
+            );
+
+            if (!hasGoodExtension) {
+                setOcrStatus("Only PNG, JPG, JPEG and PDF files are allowed.", "error");
+                return;
+            }
+
+            if (file.size > MAX_UPLOAD_BYTES) {
+                setOcrStatus("File is too large (max 5 MB).", "error");
+                return;
+            }
+
+            ocrButton.disabled = true;
+            ocrSection.style.display = "none";
+            ocrConfirm.checked = false;
+            ocrOriginal = null;
+            setOcrStatus("Reading document... this may take a few seconds.", "");
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch("/api/ocr", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Could not read the document.");
+                }
+
+                ocrText.value = data.text || "";
+                ocrSection.style.display = "block";
+                ocrOriginal = {
+                    text: data.text || "",
+                    pages: data.pages || 1
+                };
+
+                if (data.warning) {
+                    setOcrStatus(data.warning, "error");
+                } else {
+                    let message = "Done. Pages read: " + data.pages +
+                                  ". Please review the text below.";
+                    if (data.truncated) {
+                        message += " The text was very long and was cut short.";
+                    }
+                    setOcrStatus(message, "ok");
+                }
+            } catch (error) {
+                setOcrStatus("Could not read document: " + error.message, "error");
+            } finally {
+                ocrButton.disabled = false;
+            }
+        });
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            if (isUploadingAudio) {
+                result.textContent = "Please wait for voice processing to finish.";
+                return;
+            }
+
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                result.textContent = "Please stop the recording before submitting.";
+                return;
+            }
+
+            const payload = {
+                language: form.language.value,
+                name: form.name.value.trim(),
+                age: Number(form.age.value),
+                complaints: form.complaints.value.trim(),
+                original_complaints: originalTranscript.value.trim(),
+                transcription_language: detectedSpeechLanguage
+            };
+
+            let documentSaved = false;
+            const reviewedText = ocrText.value.trim();
+
+            if (ocrOriginal !== null && reviewedText !== "") {
+                if (!ocrConfirm.checked) {
+                    result.textContent =
+                        "Please tick the box to confirm you checked the document text, " +
+                        "or clear the text box to skip the document.";
+                    return;
+                }
+
+                payload.document = {
+                    original_text: ocrOriginal.text,
+                    reviewed_text: reviewedText,
+                    pages: ocrOriginal.pages
+                };
+                documentSaved = true;
+            }
+
+            submitButton.disabled = true;
+            result.textContent = "Submitting...";
+
+            try {
+                const response = await fetch("/api/intake", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Submission failed.");
+                }
+
+                result.textContent =
+                    "Intake saved" +
+                    (payload.original_complaints ? " with original voice transcript" : "") +
+                    (documentSaved ? " and document text" : "") +
+                    ". Reference: " + data.patient_id;
+
+                form.reset();
+                resetUploadArea();
+                resetVoiceArea();
+            } catch (error) {
+                result.textContent = "Could not submit: " + error.message;
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

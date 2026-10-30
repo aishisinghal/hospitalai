@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HospitalAI | Doctor Dashboard</title>
+
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: #f3f6fb; color: #1e293b; }
+header { background: #102a43; color: white; padding: 22px 6%; }
+header h1 { margin: 0 0 7px; }
+header p { margin: 0; color: #cbd5e1; }
+.warning { background: #fff3cd; color: #664d03; padding: 13px 6%; font-size: 14px; }
+main { max-width: 1150px; margin: 28px auto; padding: 0 20px; }
+.stat, .patient { background: white; border-radius: 12px; padding: 20px; margin-bottom: 18px; border: 1px solid #e2e8f0; }
+.stat strong { display: block; font-size: 30px; margin-top: 8px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stats-grid .stat { margin: 0; padding: 16px; }
+.stats-grid .stat strong { font-size: 26px; }
+.progress-wrap { display: none; background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+.progress-track { height: 10px; background: #e2e8f0; border-radius: 20px; overflow: hidden; margin-top: 8px; }
+.progress-bar { height: 100%; width: 0%; background: #2563eb; transition: width .2s ease; }
+.history-item { border-top: 1px solid #ddd6fe; padding: 8px 0; font-size: 13px; }
+.history-item:first-of-type { border-top: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
+input, select, button { font: inherit; border-radius: 8px; padding: 11px 14px; }
+input, select { border: 1px solid #cbd5e1; background: white; color: #1e293b; }
+input { flex: 1; min-width: 200px; }
+button { border: 0; background: #1769aa; color: white; cursor: pointer; }
+button:hover { background: #0f4f85; }
+button:disabled { opacity: .6; cursor: wait; }
+.primary-ai { background: #2563eb; }
+.primary-ai:hover { background: #1d4ed8; }
+.patient h3 { margin-top: 0; }
+.muted { color: #64748b; font-size: 13px; }
+.section { margin: 14px 0; padding: 14px; border-radius: 10px; border-left: 5px solid #94a3b8; background: #f8fafc; }
+.section h4 { margin: 0 0 8px; }
+.section p { white-space: pre-wrap; line-height: 1.5; }
+.patient-section { border-left-color: #16a34a; background: #f0fdf4; }
+.document-section { border-left-color: #d97706; background: #fffbeb; }
+.ai-section { border-left-color: #2563eb; background: #eff6ff; }
+.ai-review-section { border-left-color: #7c3aed; background: #f5f3ff; }
+.ai-status { display: inline-block; padding: 6px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; margin: 5px 0 10px; }
+.ai-found { background: #fee2e2; color: #991b1b; }
+.ai-uncertain { background: #fef3c7; color: #92400e; }
+.ai-clear { background: #dcfce7; color: #166534; }
+.ai-pending { background: #e2e8f0; color: #334155; }
+.priority-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.priority-badge { display: inline-block; padding: 6px 11px; border-radius: 20px; font-size: 13px; font-weight: bold; }
+.priority-high { background: #fee2e2; color: #991b1b; }
+.priority-medium { background: #fef3c7; color: #92400e; }
+.priority-low { background: #dcfce7; color: #166534; }
+.priority-unassigned { background: #e2e8f0; color: #334155; }
+.note { background: #fff7ed; color: #7c2d12; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 14px; }
+.ai-warning { background: #fee2e2; color: #7f1d1d; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; }
+#status { margin: 15px 0; color: #475569; }
+ul { padding-left: 22px; }
+li { margin: 5px 0; }
+.empty { padding: 25px; background: white; border-radius: 10px; }
+.doc-item + .doc-item { border-top: 1px dashed #d6c28a; padding-top: 12px; margin-top: 12px; }
+details { margin-top: 10px; }
+details summary { cursor: pointer; }
+@media(max-width: 600px) {
+    main { padding: 0 12px; }
+    .toolbar > * { width: 100%; }
+    input { min-width: 0; }
+}
+</style>
+</head>
+
+<body>
+<header>
+    <h1>HospitalAI</h1>
+    <p>Doctor Dashboard · AI-Assisted Patient Review</p>
+</header>
+
+<div class="warning">
+    DEVELOPMENT MODE: Fictional data only. No authentication or clinical validation.
+</div>
+
+<main>
+    <div class="stats-grid">
+        <div class="stat">Total records<strong id="count">—</strong></div>
+        <div class="stat">AI reviewed<strong id="reviewedCount">—</strong></div>
+        <div class="stat">Potential indicators<strong id="potentialCount">—</strong></div>
+        <div class="stat">Uncertain<strong id="uncertainCount">—</strong></div>
+        <div class="stat">Not reviewed<strong id="pendingCount">—</strong></div>
+    </div>
+
+    <div class="note">
+        <strong>Important:</strong> AI identifies text indicators for clinician
+        review. It does not diagnose, determine medical urgency, or assign
+        clinical priority. A clinician must review every record.
+    </div>
+
+    <div class="toolbar">
+        <input id="search" type="search" placeholder="Search patients, complaints or documents...">
+
+        <select id="sort">
+            <option value="ai">AI review queue (default)</option>
+            <option value="priority">Clinician priority</option>
+            <option value="newest">Newest first</option>
+        </select>
+
+        <select id="aiFilter">
+            <option value="all">All AI statuses</option>
+            <option value="potential_indicator_found">Potential indicators found</option>
+            <option value="uncertain">Uncertain</option>
+            <option value="not_reviewed">Not reviewed</option>
+            <option value="no_indicator_detected">No indicators detected</option>
+        </select>
+
+        <select id="priorityFilter">
+            <option value="all">All clinician priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="unassigned">Unassigned</option>
+        </select>
+
+        <button id="refresh">Refresh</button>
+        <button id="reviewAll" class="primary-ai">Run AI on unreviewed patients</button>
+    </div>
+
+    <p id="status" role="status">Loading records...</p>
+
+    <div class="progress-wrap" id="progressWrap" aria-live="polite">
+        <span id="progressText">Preparing AI reviews...</span>
+        <div class="progress-track">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <section id="records"></section>
+</main>
+
+<script>
+const recordsContainer = document.getElementById("records");
+const countElement = document.getElementById("count");
+const statusElement = document.getElementById("status");
+
+const searchInput = document.getElementById("search");
+const sortSelect = document.getElementById("sort");
+const aiFilter = document.getElementById("aiFilter");
+const priorityFilter = document.getElementById("priorityFilter");
+const reviewAllButton = document.getElementById("reviewAll");
+
+const reviewedCount = document.getElementById("reviewedCount");
+const potentialCount = document.getElementById("potentialCount");
+const uncertainCount = document.getElementById("uncertainCount");
+const pendingCount = document.getElementById("pendingCount");
+
+const progressWrap = document.getElementById("progressWrap");
+const progressBar = document.getElementById("progressBar");
+const progressText = document.getElementById("progressText");
+
+let records = [];
+let isBulkReviewRunning = false;
+
+function element(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
+}
+
+function addList(section, title, items) {
+    section.appendChild(element("h4", "", title));
+
+    if (!items || !items.length) {
+        section.appendChild(element("p", "", "None reported by the AI."));
+        return;
+    }
+
+    const list = document.createElement("ul");
+    items.forEach(item => list.appendChild(element("li", "", String(item))));
+    section.appendChild(list);
+}
+
+function aiStatusLabel(status) {
+    const labels = {
+        potential_indicator_found: "Potential indicators found",
+        uncertain: "Uncertain — needs review",
+        no_indicator_detected: "No indicators detected"
+    };
+    return labels[status] || "Not reviewed";
+}
+
+function aiStatusClass(status) {
+    if (status === "potential_indicator_found") return "ai-found";
+    if (status === "uncertain") return "ai-uncertain";
+    if (status === "no_indicator_detected") return "ai-clear";
+    return "ai-pending";
+}
+
+function getAiOrder(record) {
+    const order = {
+        potential_indicator_found: 0,
+        uncertain: 1,
+        null: 2,
+        no_indicator_detected: 3
+    };
+    return order[record.ai_review_status ?? "null"] ?? 2;
+}
+
+async function loadDocuments(record) {
+    try {
+        const response = await fetch(
+            "/api/intakes/" + encodeURIComponent(record.patient_id) + "/documents",
+            { cache: "no-store" }
+        );
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not load documents");
+
+        record.documents = data.documents || [];
+        record.documentsError = null;
+    } catch (error) {
+        record.documents = [];
+        record.documentsError = error.message;
+    }
+}
+
+async function loadReviewHistory(record) {
+    try {
+        const response = await fetch(
+            "/api/intakes/" +
+            encodeURIComponent(record.patient_id) +
+            "/ai-review/history",
+            { cache: "no-store" }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Could not load review history");
+        }
+
+        record.ai_review_history = Array.isArray(data.history)
+            ? data.history
+            : [];
+
+        record.ai_review_history_error = null;
+
+    } catch (error) {
+        record.ai_review_history = [];
+        record.ai_review_history_error = error.message;
+    }
+}
+
+function updateStats() {
+    const total = records.length;
+    const reviewed = records.filter(record => !!record.ai_review_status).length;
+    const potential = records.filter(record => record.ai_review_status === "potential_indicator_found").length;
+    const uncertain = records.filter(record => record.ai_review_status === "uncertain").length;
+    const pending = records.filter(record => !record.ai_review_status).length;
+
+    countElement.textContent = total;
+    reviewedCount.textContent = reviewed;
+    potentialCount.textContent = potential;
+    uncertainCount.textContent = uncertain;
+    pendingCount.textContent = pending;
+}
+
+function formatTimestamp(value) {
+    if (!value) return "Unknown time";
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function documentText(record) {
+    return (record.documents || [])
+        .map(doc => doc.reviewed_text || "")
+        .join(" ")
+        .toLowerCase();
+}
+
+function renderHistory(record, aiSection) {
+    const historySection = element("div", "section ai-review-section", "");
+
+    historySection.appendChild(
+        element("h4", "", "AI Review History (latest 20)")
+    );
+
+    if (record.ai_review_history_error) {
+        historySection.appendChild(element(
+            "p",
+            "muted",
+            "Could not load review history: " + record.ai_review_history_error
+        ));
+
+    } else if (
+        !record.ai_review_history ||
+        record.ai_review_history.length === 0
+    ) {
+        historySection.appendChild(element(
+            "p",
+            "muted",
+            "No previous AI reviews found."
+        ));
+
+    } else {
+        record.ai_review_history.forEach(item => {
+            const historyItem = element("div", "history-item", "");
+
+            historyItem.appendChild(element(
+                "strong",
+                "",
+                aiStatusLabel(item.status)
+            ));
+
+            historyItem.appendChild(element(
+                "p",
+                "muted",
+                "Reviewed: " + formatTimestamp(item.reviewed_at)
+            ));
+
+            if (item.evidence && item.evidence.length) {
+                historyItem.appendChild(element(
+                    "p",
+                    "",
+                    "Evidence: " + item.evidence.join("; ")
+                ));
+            }
+
+            if (item.indicators && item.indicators.length) {
+                historyItem.appendChild(element(
+                    "p",
+                    "",
+                    "Indicators: " + item.indicators.join("; ")
+                ));
+            }
+
+            historySection.appendChild(historyItem);
+        });
+    }
+
+    aiSection.appendChild(historySection);
+}
+
+function renderRecords() {
+    updateStats();
+
+    const query = searchInput.value.trim().toLowerCase();
+
+    const filtered = records.filter(record => {
+        const aiStatus = record.ai_review_status || "not_reviewed";
+        const priority = record.priority || "unassigned";
+
+        const matchesSearch =
+            (record.name || "").toLowerCase().includes(query) ||
+            (record.complaints || "").toLowerCase().includes(query) ||
+            documentText(record).includes(query);
+
+        const matchesAI =
+            aiFilter.value === "all" || aiFilter.value === aiStatus;
+
+        const matchesPriority =
+            priorityFilter.value === "all" || priorityFilter.value === priority;
+
+        return matchesSearch && matchesAI && matchesPriority;
+    });
+
+    filtered.sort((a, b) => {
+        if (sortSelect.value === "newest") {
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
+
+        if (sortSelect.value === "priority") {
+            const order = { high: 0, medium: 1, low: 2, unassigned: 3 };
+            return (order[a.priority || "unassigned"] ?? 3) -
+                   (order[b.priority || "unassigned"] ?? 3);
+        }
+
+        return getAiOrder(a) - getAiOrder(b) ||
+            new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+
+    recordsContainer.replaceChildren();
+
+    if (!filtered.length) {
+        recordsContainer.appendChild(element("div", "empty", "No matching records found."));
+        return;
+    }
+
+    filtered.forEach(record => {
+        const card = element("article", "patient", "");
+
+        card.appendChild(element("h3", "", record.name || "Unnamed patient"));
+
+        card.appendChild(element(
+            "p",
+            "muted",
+            `Age: ${record.age} · Language: ${record.language} · Created: ${record.created_at || "Unknown"}`
+        ));
+
+        // AI review
+        const aiSection = element("div", "section ai-review-section", "");
+        aiSection.appendChild(element("h4", "", "AI review"));
+
+        aiSection.appendChild(element(
+            "span",
+            "ai-status " + aiStatusClass(record.ai_review_status),
+            aiStatusLabel(record.ai_review_status)
+        ));
+
+        if (record.ai_review_status) {
+            addList(aiSection, "Indicators identified", record.ai_review_indicators);
+            addList(aiSection, "Evidence from the record", record.ai_review_evidence);
+            addList(aiSection, "Missing information", record.ai_missing_information);
+            addList(aiSection, "Limitations", record.ai_review_limitations);
+
+            aiSection.appendChild(element(
+                "p",
+                "muted",
+                "Last reviewed: " + (record.ai_reviewed_at || "Unknown")
+            ));
+        } else {
+            aiSection.appendChild(element(
+                "p",
+                "",
+                "This patient has not been analysed by the AI review system yet."
+            ));
+        }
+
+        // History is now always rendered.
+        renderHistory(record, aiSection);
+
+        const aiButton = element(
+            "button",
+            "primary-ai",
+            record.ai_review_status ? "Run AI review again" : "Run AI review"
+        );
+
+        aiButton.addEventListener("click", () => runAIReview(record, aiButton));
+        aiSection.appendChild(aiButton);
+
+        aiSection.appendChild(element(
+            "div",
+            "ai-warning",
+            "AI text analysis only. Not a diagnosis or clinical triage decision. Human review is required."
+        ));
+
+        // Clinician priority
+        const prioritySection = element("div", "section", "");
+        prioritySection.appendChild(element("h4", "", "Clinician-assigned priority"));
+
+        if (record.priority_updated_at) {
+            prioritySection.appendChild(element(
+                "p",
+                "muted",
+                "Priority last updated: " + formatTimestamp(record.priority_updated_at)
+            ));
+        }
+
+        const priorityRow = element("div", "priority-row", "");
+        const currentPriority = record.priority || "unassigned";
+
+        priorityRow.appendChild(element(
+            "span",
+            "priority-badge priority-" + currentPriority,
+            "Priority: " + currentPriority.toUpperCase()
+        ));
+
+        const prioritySelect = document.createElement("select");
+
+        [
+            ["unassigned", "Unassigned"],
+            ["high", "High"],
+            ["medium", "Medium"],
+            ["low", "Low"]
+        ].forEach(([value, label]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = label;
+            prioritySelect.appendChild(option);
+        });
+
+        prioritySelect.value = currentPriority;
+
+        prioritySelect.addEventListener("change", async () => {
+            const requested = prioritySelect.value;
+            prioritySelect.disabled = true;
+
+            try {
+                const response = await fetch(
+                    "/api/intakes/" + encodeURIComponent(record.patient_id) + "/priority",
+                    {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ priority: requested })
+                    }
+                );
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Priority update failed");
+
+                record.priority = result.priority;
+                record.priority_updated_at = result.priority_updated_at;
+
+                statusElement.textContent = "Clinician priority updated.";
+                renderRecords();
+
+            } catch (error) {
+                statusElement.textContent = "Could not update priority: " + error.message;
+                prioritySelect.value = record.priority || "unassigned";
+
+            } finally {
+                prioritySelect.disabled = false;
+            }
+        });
+
+        priorityRow.appendChild(prioritySelect);
+        prioritySection.appendChild(priorityRow);
+
+        // Patient complaints
+        const patientSection = element("div", "section patient-section", "");
+        patientSection.appendChild(element("h4", "", "Patient-reported complaints"));
+        patientSection.appendChild(element(
+            "p",
+            "",
+            record.complaints || "No complaints provided."
+        ));
+
+        // Uploaded documents
+        const documentSection = element("div", "section document-section", "");
+        documentSection.appendChild(element("h4", "", "Uploaded documents"));
+
+        if (record.documentsError) {
+            documentSection.appendChild(element(
+                "p",
+                "",
+                "Could not load documents: " + record.documentsError
+            ));
+
+        } else if (!record.documents || !record.documents.length) {
+            documentSection.appendChild(element("p", "", "No document uploaded."));
+
+        } else {
+            record.documents.forEach((doc, index) => {
+                const item = element("div", "doc-item", "");
+
+                item.appendChild(element(
+                    "p",
+                    "muted",
+                    `Document ${index + 1} · Pages: ${doc.pages} · ${doc.edited ? "Edited after OCR" : "Not edited"}`
+                ));
+
+                item.appendChild(element(
+                    "p",
+                    "",
+                    doc.reviewed_text || "No reviewed text available."
+                ));
+
+                if (doc.edited) {
+                    const details = document.createElement("details");
+
+                    details.appendChild(element("summary", "", "Show original OCR text"));
+                    details.appendChild(element("p", "", doc.original_ocr_text || ""));
+
+                    item.appendChild(details);
+                }
+
+                documentSection.appendChild(item);
+            });
+        }
+
+        // AI summary
+        const summarySection = element("div", "section ai-section", "");
+        summarySection.appendChild(element("h4", "", "AI-generated summary"));
+
+        summarySection.appendChild(element(
+            "p",
+            "",
+            record.summary || "No summary generated yet."
+        ));
+
+        summarySection.appendChild(element(
+            "p",
+            "ai-warning",
+            "AI-generated summary may contain mistakes. Clinician review is required."
+        ));
+
+        const summaryButton = element("button", "", "Generate AI summary");
+
+        summaryButton.addEventListener("click", async () => {
+            summaryButton.disabled = true;
+            summaryButton.textContent = "Generating...";
+
+            try {
+                const response = await fetch("/api/structure", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        patient_id: record.patient_id,
+                        complaints: record.complaints,
+                        language: record.language
+                    })
+                });
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Summary request failed");
+
+                await loadRecords();
+                statusElement.textContent = "AI summary generated and saved.";
+
+            } catch (error) {
+                statusElement.textContent = "Summary error: " + error.message;
+
+            } finally {
+                summaryButton.disabled = false;
+                summaryButton.textContent = "Generate AI summary";
+            }
+        });
+
+        card.append(
+            aiSection,
+            prioritySection,
+            patientSection,
+            documentSection,
+            summarySection,
+            summaryButton
+        );
+
+        recordsContainer.appendChild(card);
+    });
+}
+
+// Retry temporary server/network errors once.
+async function fetchWithRetry(url, options = {}, attempts = 2) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            const response = await fetch(url, options);
+
+            if (response.status >= 500 || response.status === 429) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(
+                    body.error || `Server temporarily unavailable (${response.status})`
+                );
+            }
+
+            return response;
+
+        } catch (error) {
+            lastError = error;
+            if (attempt === attempts) break;
+
+            await new Promise(resolve => setTimeout(resolve, 700 * attempt));
+        }
+    }
+
+    throw lastError || new Error("Request failed");
+}
+
+async function runAIReview(record, button) {
+    if (isBulkReviewRunning) return;
+
+    button.disabled = true;
+    button.textContent = "AI analysing...";
+
+    statusElement.textContent =
+        "AI is reviewing " + (record.name || "patient record") + "...";
+
+    try {
+        const url =
+            "/api/intakes/" + encodeURIComponent(record.patient_id) + "/ai-review";
+
+        const response = await fetchWithRetry(url, { method: "POST" });
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.error || "AI review failed");
+
+        await loadRecords();
+
+        statusElement.textContent =
+            "AI review saved for " + (record.name || "patient") + ".";
+
+    } catch (error) {
+        statusElement.textContent = "AI review error: " + error.message;
+
+    } finally {
+        button.disabled = false;
+        button.textContent = "Run AI review again";
+    }
+}
+
+async function runAllUnreviewed() {
+    if (isBulkReviewRunning) return;
+
+    const pending = records.filter(record => !record.ai_review_status);
+
+    if (!pending.length) {
+        statusElement.textContent = "All records already have an AI review.";
+        return;
+    }
+
+    isBulkReviewRunning = true;
+    reviewAllButton.disabled = true;
+    progressWrap.style.display = "block";
+
+    let completed = 0;
+    let failed = 0;
+    const failures = [];
+
+    try {
+        for (let index = 0; index < pending.length; index++) {
+            const record = pending[index];
+
+            progressText.textContent =
+                `Reviewing ${index + 1} of ${pending.length}: ${record.name || record.patient_id}`;
+
+            statusElement.textContent = progressText.textContent;
+            progressBar.style.width =
+                `${Math.round((index / pending.length) * 100)}%`;
+
+            try {
+                const url =
+                    "/api/intakes/" + encodeURIComponent(record.patient_id) + "/ai-review";
+
+                const response = await fetchWithRetry(url, { method: "POST" });
+                const result = await response.json();
+
+                if (!response.ok) throw new Error(result.error || "Review failed");
+                completed++;
+
+            } catch (error) {
+                failed++;
+                failures.push(
+                    `${record.name || record.patient_id}: ${error.message}`
+                );
+
+                console.error("AI review failed:", record.patient_id, error);
+            }
+
+            progressBar.style.width =
+                `${Math.round(((index + 1) / pending.length) * 100)}%`;
+        }
+
+        progressText.textContent =
+            `Finished: ${completed} successful, ${failed} failed.`;
+
+        await loadRecords();
+
+        statusElement.textContent =
+            `AI review finished. Successful: ${completed}. Failed: ${failed}.`;
+
+        if (failures.length) {
+            statusElement.textContent +=
+                " Details: " + failures.slice(0, 3).join(" | ");
+
+            if (failures.length > 3) {
+                statusElement.textContent +=
+                    ` | and ${failures.length - 3} more.`;
+            }
+        }
+
+    } finally {
+        isBulkReviewRunning = false;
+        reviewAllButton.disabled = false;
+    }
+}
+
+async function loadRecords() {
+    statusElement.textContent = "Loading patient records...";
+
+    try {
+        const response = await fetch("/api/intakes", { cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Could not load records");
+        }
+
+        records = data.intakes || [];
+        countElement.textContent = data.count ?? records.length;
+
+        await Promise.all(
+            records.flatMap(record => [
+                loadDocuments(record),
+                loadReviewHistory(record)
+            ])
+        );
+
+        renderRecords();
+        statusElement.textContent = "Patient records loaded.";
+
+    } catch (error) {
+        countElement.textContent = "—";
+
+        recordsContainer.replaceChildren(
+            element("div", "empty", "Could not load records: " + error.message)
+        );
+
+        statusElement.textContent = error.message;
+    }
+}
+
+searchInput.addEventListener("input", renderRecords);
+sortSelect.addEventListener("change", renderRecords);
+aiFilter.addEventListener("change", renderRecords);
+priorityFilter.addEventListener("change", renderRecords);
+
+document.getElementById("refresh").addEventListener("click", loadRecords);
+reviewAllButton.addEventListener("click", runAllUnreviewed);
+
+loadRecords();
+</script>
+
+</body>
+</html>
